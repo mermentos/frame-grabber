@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Frame Grabber</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <style>
+        :root {
+            --primary: #2563eb;
+            --primary-hover: #1d4ed8;
+            --bg: #f8fafc;
+            --surface: #ffffff;
+            --text: #0f172a;
+            --border: #e2e8f0;
+            --success: #10b981;
+            --error: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 1rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        @media (min-width: 640px) {
+            .container {
+                padding: 2rem;
+            }
+        }
+
+        h1 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text);
+        }
+
+        @media (min-width: 640px) {
+            h1 {
+                font-size: 1.5rem;
+            }
+        }
+
+        .title-link {
+            color: inherit;
+            text-decoration: none;
+            border-bottom: 2px solid transparent;
+            transition: border-color 0.2s ease;
+        }
+
+        .title-link:hover {
+            border-bottom-color: var(--primary);
+        }
+
+        .card {
+            background: var(--surface);
+            border-radius: 12px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .upload-zone {
+            border: 2px dashed var(--border);
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            min-height: 150px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .upload-zone:hover {
+            border-color: var(--primary);
+            background: rgba(37, 99, 235, 0.05);
+        }
+
+        .upload-zone p {
+            color: #64748b;
+            margin-top: 0.5rem;
+        }
+
+        #video {
+            width: 100%;
+            max-width: 480px;
+            max-height: 270px;
+            border-radius: 8px;
+            margin: 1rem auto;
+            background: #000;
+            display: none;
+        }
+
+        .controls {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        @media (min-width: 640px) {
+            .controls {
+                gap: 1rem;
+            }
+        }
+
+        .settings-group {
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        @media (min-width: 640px) {
+            .settings-group {
+                gap: 1rem;
+                flex-wrap: nowrap;
+            }
+        }
+
+        input[type="number"],
+        select {
+            padding: 0.5rem;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 0.875rem;
+            outline: none;
+            transition: all 0.2s ease;
+        }
+
+        input[type="number"]:focus,
+        select:focus {
+            border-color: var(--primary);
+            box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.1);
+        }
+
+        button {
+            background: var(--primary);
+            color: white;
+            border: none;
+            padding: 0.5rem 1rem;
+            border-radius: 6px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        button:hover {
+            background: var(--primary-hover);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        #progress {
+            width: 100%;
+            height: 4px;
+            border-radius: 2px;
+            margin: 1rem 0;
+            display: none;
+        }
+
+        #progress::-webkit-progress-bar {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        #progress::-webkit-progress-value {
+            background: var(--primary);
+            border-radius: 2px;
+            transition: width 0.3s ease;
+        }
+
+        #frames-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+            gap: 0.5rem;
+            margin-top: 1.5rem;
+        }
+
+        @media (min-width: 640px) {
+            #frames-container {
+                grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+                gap: 1rem;
+            }
+        }
+
+        .frame {
+            position: relative;
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--surface);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .frame:hover {
+            transform: translateY(-2px);
+        }
+
+        .frame img {
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            display: block;
+        }
+
+        .frame button {
+            position: absolute;
+            bottom: 0.5rem;
+            right: 0.5rem;
+            padding: 0.25rem 0.5rem;
+            font-size: 0.75rem;
+            background: rgba(37, 99, 235, 0.9);
+            backdrop-filter: blur(4px);
+        }
+
+        .toast-container {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .toast {
+            padding: 12px 24px;
+            border-radius: 8px;
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease forwards;
+            max-width: 300px;
+        }
+
+        .toast.success {
+            background-color: var(--success);
+        }
+
+        .toast.error {
+            background-color: var(--error);
+        }
+
+        .toast.info {
+            background-color: var(--primary);
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOut {
+            from {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            to {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>
+            <a href="https://www.linkedin.com/in/mantasmereckis/" target="_blank" rel="noopener noreferrer" class="title-link">
+                Frame Grabber by Mantas Mereckis
+            </a>
+        </h1>
+        
+        <div class="card">
+            <div class="upload-zone" id="upload-zone">
+                <input type="file" 
+                       id="video-input" 
+                       accept="video/*" 
+                       style="width: 100%; height: 100%; opacity: 0; position: absolute; cursor: pointer;"
+                       onclick="event.stopPropagation();">
+                <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="17 8 12 3 7 8"/>
+                    <line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                <p>Click or drag video file here</p>
+            </div>
+
+            <div style="text-align: center;">
+                <video id="video" controls></video>
+            </div>
+
+            <div class="controls">
+                <div class="settings-group">
+                    <label>
+                        <input type="number" id="frame-count" value="30" min="1" max="100" style="width: 80px">
+                        frames
+                    </label>
+                    <select id="capture-method">
+                        <option value="interval">Equal intervals</option>
+                        <option value="random">Random frames</option>
+                    </select>
+                    <span id="frames-generated" class="frame-counter" style="color: #64748b; font-size: 0.875rem;"></span>
+                </div>
+
+                <button id="extract-frames" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/>
+                        <line x1="7" y1="2" x2="7" y2="22"/>
+                        <line x1="17" y1="2" x2="17" y2="22"/>
+                        <line x1="2" y1="12" x2="22" y2="12"/>
+                        <line x1="2" y1="7" x2="7" y2="7"/>
+                        <line x1="2" y1="17" x2="7" y2="17"/>
+                        <line x1="17" y1="17" x2="22" y2="17"/>
+                        <line x1="17" y1="7" x2="22" y2="7"/>
+                    </svg>
+                    Extract Frames
+                </button>
+
+                <button id="download-all" disabled>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                    </svg>
+                    Download All
+                </button>
+            </div>
+
+            <progress id="progress" value="0" max="100"></progress>
+        </div>
+
+        <div id="frames-container"></div>
+        <div class="toast-container" id="toast-container"></div>
+    </div>
+
+    <script>
+        // Initialize elements
+        const videoInput = document.getElementById('video-input');
+        const uploadZone = document.getElementById('upload-zone');
+        const video = document.getElementById('video');
+        const extractButton = document.getElementById('extract-frames');
+        const downloadAllButton = document.getElementById('download-all');
+        const framesContainer = document.getElementById('frames-container');
+        const frameCountInput = document.getElementById('frame-count');
+        const captureMethod = document.getElementById('capture-method');
+        const progress = document.getElementById('progress');
+
+        let frames = [];
+
+        // Toast notification function
+        function showToast(message, type = 'info', duration = 3000) {
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            
+            const toastContainer = document.getElementById('toast-container');
+            toastContainer.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease forwards';
+                setTimeout(() => {
+                    toastContainer.removeChild(toast);
+                }, 300);
+            }, duration);
+        }
+
+        // Frame capture functions
+        async function captureFramesAtIntervals(frameCount) {
+            return new Promise((resolve) => {
+                video.addEventListener('loadedmetadata', async function onMetadataLoaded() {
+                    video.removeEventListener('loadedmetadata', onMetadataLoaded);
+                    
+                    const interval = video.duration / frameCount;
+                    
+                    for (let i = 0; i < frameCount; i++) {
+                        try {
+                            await new Promise((resolve) => {
+                                video.currentTime = i * interval;
+                                video.onseeked = () => resolve();
+                            });
+                            captureFrame(i);
+                            progress.value = (i + 1) / frameCount * 100;
+                        } catch (error) {
+                            console.error('Error capturing frame:', error);
+                        }
+                    }
+                    resolve();
+                });
+
+                if (video.readyState >= 2) {
+                    video.dispatchEvent(new Event('loadedmetadata'));
+                }
+            });
+        }
+
+        async function captureRandomFrames(frameCount) {
+            return new Promise((resolve) => {
+                video.addEventListener('loadedmetadata', async function onMetadataLoaded() {
+                    video.removeEventListener('loadedmetadata', onMetadataLoaded);
+                    
+                    const timestamps = new Set();
+                    while (timestamps.size < frameCount) {
+                        timestamps.add(Math.random() * video.duration);
+                    }
+
+                    let i = 0;
+                    for (const time of Array.from(timestamps).sort()) {
+                        try {
+                            await new Promise((resolve) => {
+                                video.currentTime = time;
+                                video.onseeked = () => resolve();
+                            });
+                            captureFrame(i);
+                            progress.value = (i + 1) / frameCount * 100;
+                            i++;
+                        } catch (error) {
+                            console.error('Error capturing frame:', error);
+                        }
+                    }
+                    resolve();
+                });
+
+                if (video.readyState >= 2) {
+                    video.dispatchEvent(new Event('loadedmetadata'));
+                }
+            });
+        }
+
+        function captureFrame(index) {
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            const frameDiv = document.createElement('div');
+            frameDiv.className = 'frame';
+            frameDiv.style.animationDelay = `${index * 0.05}s`;
+            
+            const img = document.createElement('img');
+            img.src = canvas.toDataURL('image/jpeg');
+            frames.push(img.src);
+            
+            const downloadButton = document.createElement('button');
+            downloadButton.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                    <polyline points="7 10 12 15 17 10"/>
+                    <line x1="12" y1="15" x2="12" y2="3"/>
+                </svg>
+            `;
+            downloadButton.onclick = () => downloadFrame(img.src, index);
+            
+            frameDiv.appendChild(img);
+            frameDiv.appendChild(downloadButton);
+            framesContainer.appendChild(frameDiv);
+        }
+
+        function downloadFrame(dataUrl, index) {
+            const a = document.createElement('a');
+            a.href = dataUrl;
+            a.download = `frame-${(index + 1).toString().padStart(3, '0')}.jpg`;
+            a.click();
+        }
+
+        // Video upload handling
+        function handleVideoUpload(file) {
+            const videoUrl = URL.createObjectURL(file);
+            
+            // Reset everything
+            extractButton.disabled = true;
+            downloadAllButton.disabled = true;
+            framesContainer.innerHTML = '';
+            frames = [];
+            progress.style.display = 'none';
+            progress.value = 0;
+            
+            // Cleanup old URL if it exists
+            if (video.dataset.objectUrl) {
+                URL.revokeObjectURL(video.dataset.objectUrl);
+            }
+            
+            video.src = videoUrl;
+            video.style.display = 'block';
+            video.dataset.objectUrl = videoUrl;
+
+            // Wait for video to load
+            video.addEventListener('loadeddata', function onVideoLoad() {
+                video.removeEventListener('loadeddata', onVideoLoad);
+                extractButton.disabled = false;
+                showToast('Video loaded successfully', 'success');
+            });
+
+            video.addEventListener('error', function onVideoError() {
+                video.removeEventListener('error', onVideoError);
+                showToast('Error loading video', 'error');
+            });
+        }
+
+        // Event listeners for video input
+        videoInput.addEventListener('change', function(e) {
+            e.stopPropagation();
+            e.preventDefault();
+            
+            const file = this.files[0];
+            if (file && file.type.startsWith('video/')) {
+                handleVideoUpload(file);
+            }
+        });
+
+        // Prevent the upload zone click from interfering with file input
+        uploadZone.addEventListener('click', function(e) {
+            e.stopPropagation();
+        });
+
+        // Drag and drop handling
+        uploadZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadZone.style.borderColor = '#2563eb';
+            uploadZone.style.backgroundColor = 'rgba(37, 99, 235, 0.05)';
+        });
+
+        uploadZone.addEventListener('dragleave', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadZone.style.borderColor = '#e2e8f0';
+            uploadZone.style.backgroundColor = '';
+        });
+
+        uploadZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            uploadZone.style.borderColor = '#e2e8f0';
+            uploadZone.style.backgroundColor = '';
+            
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('video/')) {
+                handleVideoUpload(file);
+            }
+        });
+
+        // Extract frames button handler
+        extractButton.addEventListener('click', async () => {
+            try {
+                frames = [];
+                framesContainer.innerHTML = '';
+                progress.style.display = 'block';
+                progress.value = 0;
+                extractButton.disabled = true;
+                showToast('Starting frame extraction...', 'info');
+
+                const frameCount = parseInt(frameCountInput.value);
+                const method = captureMethod.value;
+
+                if (!video.duration) {
+                    throw new Error('Video not properly loaded');
+                }
+
+                if (method === 'interval') {
+                    await captureFramesAtIntervals(frameCount);
+                } else {
+                    await captureRandomFrames(frameCount);
+                }
+
+                downloadAllButton.disabled = false;
+                extractButton.disabled = false;
+                progress.style.display = 'none';
+                
+                const framesGeneratedEl = document.getElementById('frames-generated');
+                framesGeneratedEl.textContent = `${frames.length} frames generated`;
+                
+                showToast(`Successfully extracted ${frames.length} frames`, 'success');
+            } catch (error) {
+                console.error('Error extracting frames:', error);
+                extractButton.disabled = false;
+                progress.style.display = 'none';
+                showToast('Error extracting frames. Please try again.', 'error');
+            }
+        });
+
+        // Download all frames button handler
+        downloadAllButton.addEventListener('click', async () => {
+            try {
+                showToast('Preparing ZIP file...', 'info');
+                const zip = new JSZip();
+                
+                frames.forEach((frame, index) => {
+                    const imageData = frame.split(',')[1];
+                    zip.file(`frame-${(index + 1).toString().padStart(3, '0')}.jpg`, imageData, {base64: true});
+                });
+                
+                const content = await zip.generateAsync({type: "blob"});
+                const zipUrl = URL.createObjectURL(content);
+                const a = document.createElement('a');
+                a.href = zipUrl;
+                a.download = 'frames.zip';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(zipUrl);
+                
+                showToast('Frames downloaded successfully', 'success');
+            } catch (error) {
+                console.error('Error downloading frames:', error);
+                showToast('Error downloading frames. Please try again.', 'error');
+            }
+        });
+    </script>
+</body>
+</html>
